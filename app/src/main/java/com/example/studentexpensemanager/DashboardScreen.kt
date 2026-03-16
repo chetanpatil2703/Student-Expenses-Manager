@@ -313,7 +313,7 @@ fun SummaryCard(totalBalance: Double, income: Double, expense: Double) {
                 )
                 val formattedBalance = String.format(Locale.US, "%.2f", totalBalance)
                 Text(
-                    text = "$$formattedBalance",
+                    text = "₹$formattedBalance",
                     color = Color.White,
                     fontSize = 36.sp,
                     fontWeight = FontWeight.Bold
@@ -362,7 +362,7 @@ fun SummaryInfo(label: String, amount: Double, icon: ImageVector, iconColor: Col
         Column {
             Text(text = label, color = TextSecondary, fontSize = 12.sp)
             Text(
-                text = "$${amount.toInt()}",
+                text = "₹${amount.toInt()}",
                 color = Color.White,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
@@ -421,7 +421,7 @@ fun TransactionItem(transaction: TransactionEntity, onClick: () -> Unit) {
                 val prefix = if (transaction.isIncome) "+" else "-"
                 val absAmount = String.format(Locale.US, "%.2f", abs(transaction.amount))
                 Text(
-                    text = "$prefix$$absAmount",
+                    text = "$prefix₹$absAmount",
                     color = if (transaction.isIncome) IncomeColor else ExpenseColor,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
