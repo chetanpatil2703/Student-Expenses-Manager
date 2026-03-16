@@ -9,17 +9,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.studentexpensemanager.ui.theme.DarkBackground
 import com.example.studentexpensemanager.ui.theme.ItemBackground
 import com.example.studentexpensemanager.ui.theme.StudentExpenseManagerTheme
 
@@ -29,8 +28,58 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             StudentExpenseManagerTheme(darkTheme = true) {
-                MainScreen()
+                AppNavigation()
             }
+        }
+    }
+}
+
+@Composable
+fun AppNavigation(authViewModel: AuthViewModel = viewModel()) {
+    val isLoggedIn by authViewModel.isLoggedIn.collectAsState(initial = false)
+    val navController = rememberNavController()
+
+    NavHost(
+        navController = navController,
+        startDestination = if (isLoggedIn) "main" else "auth"
+    ) {
+        composable("auth") {
+            AuthNavHost(
+                onLoginSuccess = {
+                    navController.navigate("main") {
+                        popUpTo("auth") { inclusive = true }
+                    }
+                }
+            )
+        }
+        composable("main") {
+            MainScreen(
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate("auth") {
+                        popUpTo("main") { inclusive = true }
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun AuthNavHost(onLoginSuccess: () -> Unit) {
+    val authNavController = rememberNavController()
+    NavHost(navController = authNavController, startDestination = "login") {
+        composable("login") {
+            LoginScreen(
+                onLoginSuccess = onLoginSuccess,
+                onNavigateToRegister = { authNavController.navigate("register") }
+            )
+        }
+        composable("register") {
+            RegisterScreen(
+                onRegisterSuccess = { authNavController.navigate("login") },
+                onNavigateToLogin = { authNavController.navigate("login") }
+            )
         }
     }
 }
@@ -41,7 +90,7 @@ sealed class Screen(val route: String, val label: String, val icon: androidx.com
 }
 
 @Composable
-fun MainScreen() {
+fun MainScreen(onLogout: () -> Unit) {
     val navController = rememberNavController()
     val items = listOf(
         Screen.Dashboard,
@@ -87,7 +136,7 @@ fun MainScreen() {
             startDestination = Screen.Dashboard.route, 
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(Screen.Dashboard.route) { DashboardScreen() }
+            composable(Screen.Dashboard.route) { DashboardScreen(onLogout = onLogout) }
             composable(Screen.Analytics.route) { AnalyticsScreen() }
         }
     }
