@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,34 +21,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.studentexpensemanager.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 
-data class Transaction(
-    val id: Int,
-    val title: String,
-    val category: String,
-    val amount: Double,
-    val date: String,
-    val isIncome: Boolean
-)
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen() {
-    val transactionList = remember {
-        mutableStateListOf(
-            Transaction(1, "Monthly Rent", "Housing", -500.0, "Oct 01", false),
-            Transaction(2, "Part-time Salary", "Income", 1200.0, "Oct 05", true),
-            Transaction(3, "Groceries", "Food", -85.5, "Oct 07", false),
-            Transaction(4, "Internet Bill", "Utilities", -40.0, "Oct 10", false),
-            Transaction(5, "Dinner with Friends", "Entertainment", -45.0, "Oct 12", false)
-        )
-    }
-
+fun DashboardScreen(viewModel: TransactionViewModel = viewModel()) {
+    val transactionList by viewModel.allTransactions.collectAsState(initial = emptyList())
     var showDialog by remember { mutableStateOf(false) }
 
     val totalIncome = transactionList.filter { it.isIncome }.sumOf { it.amount }
@@ -111,12 +98,62 @@ fun DashboardScreen() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                items(transactionList.toList().reversed(), key = { it.id }) { transaction ->
-                    TransactionItem(transaction)
+            if (transactionList.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No transactions found.\nAdd your first expense!",
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center,
+                        fontSize = 16.sp
+                    )
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    items(transactionList, key = { it.id }) { transaction ->
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = {
+                                if (it == SwipeToDismissBoxValue.EndToStart) {
+                                    viewModel.delete(transaction)
+                                    true
+                                } else false
+                            }
+                        )
+
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            backgroundContent = {
+                                val color = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                                    ExpenseColor
+                                } else Color.Transparent
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(color)
+                                        .padding(horizontal = 20.dp),
+                                    contentAlignment = Alignment.CenterEnd
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Delete",
+                                        tint = Color.White
+                                    )
+                                }
+                            },
+                            enableDismissFromStartToEnd = false
+                        ) {
+                            TransactionItem(transaction)
+                        }
+                    }
                 }
             }
         }
@@ -125,14 +162,13 @@ fun DashboardScreen() {
             AddTransactionDialog(
                 onDismiss = { showDialog = false },
                 onAddTransaction = { title, category, amount, isIncome ->
-                    val newId = (transactionList.maxOfOrNull { it.id } ?: 0) + 1
-                    transactionList.add(
-                        Transaction(
-                            id = newId,
+                    val currentDate = SimpleDateFormat("MMM dd", Locale.US).format(Date())
+                    viewModel.insert(
+                        TransactionEntity(
                             title = title,
                             category = category,
                             amount = if (isIncome) amount else -amount,
-                            date = "Oct 15",
+                            date = currentDate,
                             isIncome = isIncome
                         )
                     )
@@ -322,7 +358,7 @@ fun SummaryInfo(label: String, amount: Double, icon: ImageVector, iconColor: Col
 }
 
 @Composable
-fun TransactionItem(transaction: Transaction) {
+fun TransactionItem(transaction: TransactionEntity) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = ItemBackground),
@@ -381,13 +417,5 @@ fun TransactionItem(transaction: Transaction) {
                 )
             }
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun DashboardPreview() {
-    StudentExpenseManagerTheme(darkTheme = true) {
-        DashboardScreen()
     }
 }
