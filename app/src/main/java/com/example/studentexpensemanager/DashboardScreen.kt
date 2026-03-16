@@ -32,6 +32,28 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 
+data class Category(
+    val name: String,
+    val icon: String,
+    val color: Color
+)
+
+val expenseCategories = listOf(
+    Category("Food", "🍽️", Color(0xFFFFE0B2)),
+    Category("Transport", "🚗", Color(0xFFB3E5FC)),
+    Category("Bills", "🧾", Color(0xFFD1C4E9)),
+    Category("Shopping", "🛍️", Color(0xFFF8BBD0)),
+    Category("Other", "⋯", Color(0xFFE0E0E0))
+)
+
+val incomeCategories = listOf(
+    Category("Salary", "🏦", Color(0xFFC5CAE9)),
+    Category("Business", "🏢", Color(0xFFD7CCC8)),
+    Category("Investment", "📈", Color(0xFFA5D6A7)),
+    Category("Gift", "🎀", Color(0xFFF8BBD0)),
+    Category("Other", "⋯", Color(0xFFE0E0E0))
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(viewModel: TransactionViewModel = viewModel()) {
@@ -203,6 +225,16 @@ fun TransactionDialog(
     var category by remember { mutableStateOf(transaction?.category ?: "") }
     var amount by remember { mutableStateOf(if (transaction != null) abs(transaction.amount).toString() else "") }
     var isIncome by remember { mutableStateOf(transaction?.isIncome ?: false) }
+    var expanded by remember { mutableStateOf(false) }
+
+    val categories = if (isIncome) incomeCategories else expenseCategories
+    
+    // Reset category if not in current list
+    LaunchedEffect(isIncome) {
+        if (categories.none { it.name == category }) {
+            category = categories.first().name
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -210,6 +242,19 @@ fun TransactionDialog(
         containerColor = ItemBackground,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(
+                        checked = isIncome,
+                        onCheckedChange = { isIncome = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = IncomeColor,
+                            checkedTrackColor = IncomeColor.copy(alpha = 0.5f)
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (isIncome) "Income" else "Expense", color = Color.White)
+                }
+
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -226,22 +271,51 @@ fun TransactionDialog(
                         unfocusedContainerColor = Color.Transparent
                     )
                 )
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    label = { Text("Category") },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF00BCD4),
-                        unfocusedBorderColor = Color.Gray,
-                        focusedLabelColor = Color(0xFF00BCD4),
-                        unfocusedLabelColor = Color.Gray,
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent
+
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = !expanded }
+                ) {
+                    OutlinedTextField(
+                        value = category,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Category") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF00BCD4),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedLabelColor = Color(0xFF00BCD4),
+                            unfocusedLabelColor = Color.Gray,
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent
+                        )
                     )
-                )
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier.background(ItemBackground)
+                    ) {
+                        categories.forEach { cat ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(cat.icon, modifier = Modifier.padding(end = 8.dp))
+                                        Text(cat.name, color = Color.White)
+                                    }
+                                },
+                                onClick = {
+                                    category = cat.name
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { amount = it },
@@ -259,14 +333,6 @@ fun TransactionDialog(
                         unfocusedContainerColor = Color.Transparent
                     )
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = isIncome,
-                        onCheckedChange = { isIncome = it },
-                        colors = CheckboxDefaults.colors(checkedColor = Color(0xFF00BCD4))
-                    )
-                    Text("Income?", color = Color.White)
-                }
             }
         },
         confirmButton = {
@@ -373,6 +439,12 @@ fun SummaryInfo(label: String, amount: Double, icon: ImageVector, iconColor: Col
 
 @Composable
 fun TransactionItem(transaction: TransactionEntity, onClick: () -> Unit) {
+    val category = if (transaction.isIncome) {
+        incomeCategories.find { it.name == transaction.category } ?: Category("Other", "⋯", Color(0xFFE0E0E0))
+    } else {
+        expenseCategories.find { it.name == transaction.category } ?: Category("Other", "⋯", Color(0xFFE0E0E0))
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -390,14 +462,12 @@ fun TransactionItem(transaction: TransactionEntity, onClick: () -> Unit) {
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.05f)),
+                    .background(category.color.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.History,
-                    contentDescription = null,
-                    tint = Color(0xFF00BCD4),
-                    modifier = Modifier.size(24.dp)
+                Text(
+                    text = category.icon,
+                    fontSize = 24.sp
                 )
             }
 
