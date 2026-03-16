@@ -1,6 +1,7 @@
 package com.example.studentexpensemanager
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,6 +37,7 @@ import kotlin.math.abs
 fun DashboardScreen(viewModel: TransactionViewModel = viewModel()) {
     val transactionList by viewModel.allTransactions.collectAsState(initial = emptyList())
     var showDialog by remember { mutableStateOf(false) }
+    var editingTransaction by remember { mutableStateOf<TransactionEntity?>(null) }
 
     val totalIncome = transactionList.filter { it.isIncome }.sumOf { it.amount }
     val totalExpense = transactionList.filter { !it.isIncome }.sumOf { abs(it.amount) }
@@ -46,7 +48,10 @@ fun DashboardScreen(viewModel: TransactionViewModel = viewModel()) {
         containerColor = DarkBackground,
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showDialog = true },
+                onClick = { 
+                    editingTransaction = null
+                    showDialog = true 
+                },
                 containerColor = Color(0xFF00BCD4),
                 contentColor = Color.White,
                 shape = RoundedCornerShape(16.dp)
@@ -151,7 +156,13 @@ fun DashboardScreen(viewModel: TransactionViewModel = viewModel()) {
                             },
                             enableDismissFromStartToEnd = false
                         ) {
-                            TransactionItem(transaction)
+                            TransactionItem(
+                                transaction = transaction,
+                                onClick = {
+                                    editingTransaction = transaction
+                                    showDialog = true
+                                }
+                            )
                         }
                     }
                 }
@@ -159,16 +170,18 @@ fun DashboardScreen(viewModel: TransactionViewModel = viewModel()) {
         }
 
         if (showDialog) {
-            AddTransactionDialog(
+            TransactionDialog(
+                transaction = editingTransaction,
                 onDismiss = { showDialog = false },
-                onAddTransaction = { title, category, amount, isIncome ->
+                onSaveTransaction = { title, category, amount, isIncome ->
                     val currentDate = SimpleDateFormat("MMM dd", Locale.US).format(Date())
                     viewModel.insert(
                         TransactionEntity(
+                            id = editingTransaction?.id ?: 0,
                             title = title,
                             category = category,
                             amount = if (isIncome) amount else -amount,
-                            date = currentDate,
+                            date = editingTransaction?.date ?: currentDate,
                             isIncome = isIncome
                         )
                     )
@@ -181,18 +194,19 @@ fun DashboardScreen(viewModel: TransactionViewModel = viewModel()) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddTransactionDialog(
+fun TransactionDialog(
+    transaction: TransactionEntity? = null,
     onDismiss: () -> Unit,
-    onAddTransaction: (String, String, Double, Boolean) -> Unit
+    onSaveTransaction: (String, String, Double, Boolean) -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
-    var isIncome by remember { mutableStateOf(false) }
+    var title by remember { mutableStateOf(transaction?.title ?: "") }
+    var category by remember { mutableStateOf(transaction?.category ?: "") }
+    var amount by remember { mutableStateOf(if (transaction != null) abs(transaction.amount).toString() else "") }
+    var isIncome by remember { mutableStateOf(transaction?.isIncome ?: false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Transaction", color = Color.White) },
+        title = { Text(if (transaction == null) "Add Transaction" else "Edit Transaction", color = Color.White) },
         containerColor = ItemBackground,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -260,12 +274,12 @@ fun AddTransactionDialog(
                 onClick = {
                     val amt = amount.toDoubleOrNull() ?: 0.0
                     if (title.isNotEmpty() && amt != 0.0) {
-                        onAddTransaction(title, category, amt, isIncome)
+                        onSaveTransaction(title, category, amt, isIncome)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4))
             ) {
-                Text("Add")
+                Text(if (transaction == null) "Add" else "Update")
             }
         },
         dismissButton = {
@@ -358,9 +372,11 @@ fun SummaryInfo(label: String, amount: Double, icon: ImageVector, iconColor: Col
 }
 
 @Composable
-fun TransactionItem(transaction: TransactionEntity) {
+fun TransactionItem(transaction: TransactionEntity, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = ItemBackground),
         shape = RoundedCornerShape(16.dp)
     ) {
