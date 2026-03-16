@@ -16,14 +16,20 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.studentexpensemanager.ui.theme.DarkBackground
 import com.example.studentexpensemanager.ui.theme.ItemBackground
 import com.example.studentexpensemanager.ui.theme.TextSecondary
+import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
@@ -82,26 +88,28 @@ fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
                 Text(text = "No data available", color = TextSecondary)
             }
         } else {
-            // Pie Chart
+            // Pie Chart Section
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp),
+                    .height(260.dp),
                 contentAlignment = Alignment.Center
             ) {
-                PieChart(categoryTotals)
+                PieChart(categoryTotals, isIncome = selectedTab == 1)
+                
+                // Center Total Text
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "Total", color = TextSecondary, fontSize = 14.sp)
+                    Text(text = "Total", color = TextSecondary, fontSize = 12.sp)
                     Text(
-                        text = "₹${String.format("%.0f", totalAmount)}",
+                        text = "₹${String.format(Locale.US, "%.0f", totalAmount)}",
                         color = Color.White,
-                        fontSize = 20.sp,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Category Breakdown List
             LazyColumn(
@@ -123,17 +131,23 @@ fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
 }
 
 @Composable
-fun PieChart(categoryTotals: Map<String, Double>) {
+fun PieChart(categoryTotals: Map<String, Double>, isIncome: Boolean) {
     val total = categoryTotals.values.sum()
     var startAngle = -90f
+    val textMeasurer = rememberTextMeasurer()
 
-    Canvas(modifier = Modifier.size(180.dp)) {
+    Canvas(modifier = Modifier.size(240.dp)) {
+        val radius = size.minDimension / 3f
+        val center = Offset(size.width / 2, size.height / 2)
+
         categoryTotals.forEach { (catName, amount) ->
-            val cat = expenseCategories.find { it.name == catName } 
-                ?: incomeCategories.find { it.name == catName }
+            val cat = (if (isIncome) incomeCategories else expenseCategories).find { it.name == catName }
                 ?: Category("Other", "⋯", Color.Gray)
             
             val sweepAngle = (amount / total * 360).toFloat()
+            val middleAngle = startAngle + sweepAngle / 2
+            
+            // 1. Draw the donut segment
             drawArc(
                 color = cat.color,
                 startAngle = startAngle,
@@ -141,6 +155,47 @@ fun PieChart(categoryTotals: Map<String, Double>) {
                 useCenter = false,
                 style = Stroke(width = 30.dp.toPx())
             )
+
+            // 2. Draw Callout Line and Label if segment is large enough
+            if (sweepAngle > 10) {
+                val cos = cos(Math.toRadians(middleAngle.toDouble())).toFloat()
+                val sin = sin(Math.toRadians(middleAngle.toDouble())).toFloat()
+                
+                // Line points
+                val lineStart = Offset(
+                    center.x + (radius + 15.dp.toPx()) * cos,
+                    center.y + (radius + 15.dp.toPx()) * sin
+                )
+                val lineEnd = Offset(
+                    center.x + (radius + 35.dp.toPx()) * cos,
+                    center.y + (radius + 35.dp.toPx()) * sin
+                )
+                
+                // Draw small line pointing to label
+                drawLine(
+                    color = cat.color.copy(alpha = 0.5f),
+                    start = lineStart,
+                    end = lineEnd,
+                    strokeWidth = 2.dp.toPx()
+                )
+
+                // Draw Icon Label
+                val textLayoutResult = textMeasurer.measure(
+                    text = cat.icon,
+                    style = TextStyle(fontSize = 18.sp)
+                )
+                
+                val labelOffset = Offset(
+                    center.x + (radius + 50.dp.toPx()) * cos - textLayoutResult.size.width / 2,
+                    center.y + (radius + 50.dp.toPx()) * sin - textLayoutResult.size.height / 2
+                )
+                
+                drawText(
+                    textLayoutResult = textLayoutResult,
+                    topLeft = labelOffset
+                )
+            }
+            
             startAngle += sweepAngle
         }
     }
@@ -148,7 +203,7 @@ fun PieChart(categoryTotals: Map<String, Double>) {
 
 @Composable
 fun CategoryBreakdownItem(category: Category, amount: Double, total: Double) {
-    val percentage = (amount / total * 100).toInt()
+    val percentage = if (total > 0) (amount / total * 100).toInt() else 0
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -162,7 +217,7 @@ fun CategoryBreakdownItem(category: Category, amount: Double, total: Double) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(category.color.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -173,14 +228,26 @@ fun CategoryBreakdownItem(category: Category, amount: Double, total: Double) {
             
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = category.name, color = Color.White, fontWeight = FontWeight.SemiBold)
-                Text(text = "$percentage%", color = TextSecondary, fontSize = 12.sp)
+                
+                // Mini progress bar for category percentage
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = { (amount / total).toFloat() },
+                    modifier = Modifier.fillMaxWidth(0.6f).height(4.dp).clip(RoundedCornerShape(2.dp)),
+                    color = category.color,
+                    trackColor = Color.White.copy(alpha = 0.1f),
+                )
             }
             
-            Text(
-                text = "₹${String.format("%.2f", amount)}",
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "₹${String.format(Locale.US, "%.2f", amount)}",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+                Text(text = "$percentage%", color = TextSecondary, fontSize = 12.sp)
+            }
         }
     }
 }

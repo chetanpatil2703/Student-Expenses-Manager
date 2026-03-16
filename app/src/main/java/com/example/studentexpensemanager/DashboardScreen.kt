@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,28 +30,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
-
-data class Category(
-    val name: String,
-    val icon: String,
-    val color: Color
-)
-
-val expenseCategories = listOf(
-    Category("Food", "🍽️", Color(0xFFFFE0B2)),
-    Category("Transport", "🚗", Color(0xFFB3E5FC)),
-    Category("Bills", "🧾", Color(0xFFD1C4E9)),
-    Category("Shopping", "🛍️", Color(0xFFF8BBD0)),
-    Category("Other", "⋯", Color(0xFFE0E0E0))
-)
-
-val incomeCategories = listOf(
-    Category("Salary", "🏦", Color(0xFFC5CAE9)),
-    Category("Business", "🏢", Color(0xFFD7CCC8)),
-    Category("Investment", "📈", Color(0xFFA5D6A7)),
-    Category("Gift", "🎀", Color(0xFFF8BBD0)),
-    Category("Other", "⋯", Color(0xFFE0E0E0))
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -229,10 +206,9 @@ fun TransactionDialog(
 
     val categories = if (isIncome) incomeCategories else expenseCategories
     
-    // Reset category if not in current list
     LaunchedEffect(isIncome) {
         if (categories.none { it.name == category }) {
-            category = categories.first().name
+            category = if (categories.isNotEmpty()) categories.first().name else ""
         }
     }
 
