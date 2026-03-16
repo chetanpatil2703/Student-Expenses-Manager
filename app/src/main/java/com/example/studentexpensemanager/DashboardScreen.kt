@@ -5,18 +5,21 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,19 +36,37 @@ data class Transaction(
     val isIncome: Boolean
 )
 
-val transactions = listOf(
-    Transaction(1, "Monthly Rent", "Housing", -500.00, "Oct 01", false),
-    Transaction(2, "Part-time Salary", "Income", 1200.00, "Oct 05", true),
-    Transaction(3, "Groceries", "Food", -85.50, "Oct 07", false),
-    Transaction(4, "Internet Bill", "Utilities", -40.00, "Oct 10", false),
-    Transaction(5, "Dinner with Friends", "Entertainment", -45.00, "Oct 12", false)
-)
-
 @Composable
 fun DashboardScreen() {
+    val transactionList = remember {
+        mutableStateListOf(
+            Transaction(1, "Monthly Rent", "Housing", -500.0, "Oct 01", false),
+            Transaction(2, "Part-time Salary", "Income", 1200.0, "Oct 05", true),
+            Transaction(3, "Groceries", "Food", -85.5, "Oct 07", false),
+            Transaction(4, "Internet Bill", "Utilities", -40.0, "Oct 10", false),
+            Transaction(5, "Dinner with Friends", "Entertainment", -45.0, "Oct 12", false)
+        )
+    }
+
+    var showDialog by remember { mutableStateOf(false) }
+
+    val totalIncome = transactionList.filter { it.isIncome }.sumOf { it.amount }
+    val totalExpense = transactionList.filter { !it.isIncome }.sumOf { abs(it.amount) }
+    val totalBalance = totalIncome - totalExpense
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = DarkBackground
+        containerColor = DarkBackground,
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showDialog = true },
+                containerColor = Color(0xFF00BCD4),
+                contentColor = Color.White,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add Transaction")
+            }
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -63,9 +84,9 @@ fun DashboardScreen() {
             Spacer(modifier = Modifier.height(24.dp))
 
             SummaryCard(
-                totalBalance = 529.50,
-                income = 1200.0,
-                expense = 671.0
+                totalBalance = totalBalance,
+                income = totalIncome,
+                expense = totalExpense
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -91,14 +112,132 @@ fun DashboardScreen() {
             Spacer(modifier = Modifier.height(16.dp))
 
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.weight(1f)
             ) {
-                items(transactions) { transaction ->
+                items(transactionList.toList().reversed(), key = { it.id }) { transaction ->
                     TransactionItem(transaction)
                 }
             }
         }
+
+        if (showDialog) {
+            AddTransactionDialog(
+                onDismiss = { showDialog = false },
+                onAddTransaction = { title, category, amount, isIncome ->
+                    val newId = (transactionList.maxOfOrNull { it.id } ?: 0) + 1
+                    transactionList.add(
+                        Transaction(
+                            id = newId,
+                            title = title,
+                            category = category,
+                            amount = if (isIncome) amount else -amount,
+                            date = "Oct 15",
+                            isIncome = isIncome
+                        )
+                    )
+                    showDialog = false
+                }
+            )
+        }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddTransactionDialog(
+    onDismiss: () -> Unit,
+    onAddTransaction: (String, String, Double, Boolean) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("") }
+    var isIncome by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Transaction", color = Color.White) },
+        containerColor = ItemBackground,
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF00BCD4),
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = Color(0xFF00BCD4),
+                        unfocusedLabelColor = Color.Gray,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    )
+                )
+                OutlinedTextField(
+                    value = category,
+                    onValueChange = { category = it },
+                    label = { Text("Category") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF00BCD4),
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = Color(0xFF00BCD4),
+                        unfocusedLabelColor = Color.Gray,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    )
+                )
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text("Amount") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF00BCD4),
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = Color(0xFF00BCD4),
+                        unfocusedLabelColor = Color.Gray,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    )
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = isIncome,
+                        onCheckedChange = { isIncome = it },
+                        colors = CheckboxDefaults.colors(checkedColor = Color(0xFF00BCD4))
+                    )
+                    Text("Income?", color = Color.White)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val amt = amount.toDoubleOrNull() ?: 0.0
+                    if (title.isNotEmpty() && amt != 0.0) {
+                        onAddTransaction(title, category, amt, isIncome)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4))
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = Color.Gray)
+            }
+        }
+    )
 }
 
 @Composable
@@ -122,8 +261,9 @@ fun SummaryCard(totalBalance: Double, income: Double, expense: Double) {
                     color = TextSecondary,
                     fontSize = 16.sp
                 )
+                val formattedBalance = String.format(Locale.US, "%.2f", totalBalance)
                 Text(
-                    text = "$${String.format(Locale.US, "%.2f", totalBalance)}",
+                    text = "$$formattedBalance",
                     color = Color.White,
                     fontSize = 36.sp,
                     fontWeight = FontWeight.Bold
@@ -226,8 +366,10 @@ fun TransactionItem(transaction: Transaction) {
             }
 
             Column(horizontalAlignment = Alignment.End) {
+                val prefix = if (transaction.isIncome) "+" else "-"
+                val absAmount = String.format(Locale.US, "%.2f", abs(transaction.amount))
                 Text(
-                    text = "${if (transaction.isIncome) "+" else "-"}$${abs(transaction.amount)}",
+                    text = "$prefix$$absAmount",
                     color = if (transaction.isIncome) IncomeColor else ExpenseColor,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
