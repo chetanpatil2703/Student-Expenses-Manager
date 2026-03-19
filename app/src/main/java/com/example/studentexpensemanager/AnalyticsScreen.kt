@@ -2,10 +2,13 @@ package com.example.studentexpensemanager
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -13,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
@@ -26,17 +28,32 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.studentexpensemanager.ui.theme.DarkBackground
 import com.example.studentexpensemanager.ui.theme.ItemBackground
 import com.example.studentexpensemanager.ui.theme.TextSecondary
-import java.util.Locale
+import java.text.SimpleDateFormat
+import java.util.*
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
+
+enum class TimePeriod(val label: String) {
+    MONTHLY("Monthly"),
+    QUARTERLY("Quarterly"),
+    ANNUALLY("Annually")
+}
 
 @Composable
 fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
     val transactionList by viewModel.allTransactions.collectAsState(initial = emptyList())
     var selectedTab by remember { mutableIntStateOf(0) } // 0 for Expense, 1 for Income
+    var selectedPeriod by remember { mutableStateOf(TimePeriod.MONTHLY) }
+    var showPeriodMenu by remember { mutableStateOf(false) }
 
-    val filteredTransactions = transactionList.filter { it.isIncome == (selectedTab == 1) }
+    val filteredTransactions = remember(transactionList, selectedTab, selectedPeriod) {
+        val now = Calendar.getInstance()
+        transactionList.filter { transaction ->
+            transaction.isIncome == (selectedTab == 1) && isWithinPeriod(transaction.date, selectedPeriod, now)
+        }
+    }
+
     val categoryTotals = filteredTransactions.groupBy { it.category }
         .mapValues { entry -> entry.value.sumOf { abs(it.amount) } }
     
@@ -48,12 +65,51 @@ fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
             .background(DarkBackground)
             .padding(16.dp)
     ) {
-        Text(
-            text = "Analytics",
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color.White,
-            fontWeight = FontWeight.Bold
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Analytics",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            
+            // Period Selector
+            Box {
+                Surface(
+                    onClick = { showPeriodMenu = true },
+                    color = ItemBackground,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(selectedPeriod.label, color = Color.White, fontSize = 14.sp)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.White)
+                    }
+                }
+                
+                DropdownMenu(
+                    expanded = showPeriodMenu,
+                    onDismissRequest = { showPeriodMenu = false },
+                    modifier = Modifier.background(ItemBackground)
+                ) {
+                    TimePeriod.values().forEach { period ->
+                        DropdownMenuItem(
+                            text = { Text(period.label, color = Color.White) },
+                            onClick = {
+                                selectedPeriod = period
+                                showPeriodMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -85,7 +141,7 @@ fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
 
         if (categoryTotals.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(text = "No data available", color = TextSecondary)
+                Text(text = "No data for this period", color = TextSecondary)
             }
         } else {
             // Pie Chart Section
@@ -127,6 +183,43 @@ fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
                 }
             }
         }
+    }
+}
+
+fun isWithinPeriod(dateStr: String, period: TimePeriod, now: Calendar): Boolean {
+    return try {
+        // Updated to support both "MMM dd" and "MMM dd, yyyy" formats
+        val sdf = if (dateStr.contains(",")) {
+            SimpleDateFormat("MMM dd, yyyy", Locale.US)
+        } else {
+            SimpleDateFormat("MMM dd", Locale.US)
+        }
+        
+        val date = sdf.parse(dateStr) ?: return false
+        val cal = Calendar.getInstance()
+        cal.time = date
+        
+        // If year is not present in original string, assume current year
+        if (!dateStr.contains(",")) {
+            cal.set(Calendar.YEAR, now.get(Calendar.YEAR))
+        }
+
+        when (period) {
+            TimePeriod.MONTHLY -> {
+                cal.get(Calendar.MONTH) == now.get(Calendar.MONTH) &&
+                cal.get(Calendar.YEAR) == now.get(Calendar.YEAR)
+            }
+            TimePeriod.QUARTERLY -> {
+                val currentQuarter = now.get(Calendar.MONTH) / 3
+                val dateQuarter = cal.get(Calendar.MONTH) / 3
+                currentQuarter == dateQuarter && cal.get(Calendar.YEAR) == now.get(Calendar.YEAR)
+            }
+            TimePeriod.ANNUALLY -> {
+                cal.get(Calendar.YEAR) == now.get(Calendar.YEAR)
+            }
+        }
+    } catch (e: Exception) {
+        false
     }
 }
 

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -28,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.studentexpensemanager.ui.theme.*
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
@@ -189,15 +192,14 @@ fun DashboardScreen(
             TransactionDialog(
                 transaction = editingTransaction,
                 onDismiss = { showDialog = false },
-                onSaveTransaction = { title, category, amount, isIncome ->
-                    val currentDate = SimpleDateFormat("MMM dd", Locale.US).format(Date())
+                onSaveTransaction = { title, category, amount, isIncome, date ->
                     viewModel.insert(
                         TransactionEntity(
                             id = editingTransaction?.id ?: 0,
                             title = title,
                             category = category,
                             amount = if (isIncome) amount else -amount,
-                            date = editingTransaction?.date ?: currentDate,
+                            date = date,
                             isIncome = isIncome
                         )
                     )
@@ -213,14 +215,16 @@ fun DashboardScreen(
 fun TransactionDialog(
     transaction: TransactionEntity? = null,
     onDismiss: () -> Unit,
-    onSaveTransaction: (String, String, Double, Boolean) -> Unit
+    onSaveTransaction: (String, String, Double, Boolean, String) -> Unit
 ) {
     var title by remember { mutableStateOf(transaction?.title ?: "") }
     var category by remember { mutableStateOf(transaction?.category ?: "") }
     var amount by remember { mutableStateOf(if (transaction != null) abs(transaction.amount).toString() else "") }
     var isIncome by remember { mutableStateOf(transaction?.isIncome ?: false) }
+    var date by remember { mutableStateOf(transaction?.date ?: SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date())) }
     var expanded by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
     val categories = if (isIncome) incomeCategories else expenseCategories
     
     LaunchedEffect(isIncome) {
@@ -247,6 +251,48 @@ fun TransactionDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(if (isIncome) "Income" else "Expense", color = Color.White)
                 }
+
+                OutlinedTextField(
+                    value = date,
+                    onValueChange = { },
+                    readOnly = true,
+                    label = { Text("Date") },
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            val calendar = Calendar.getInstance()
+                            // Try to parse current date to set picker start position
+                            try {
+                                val currentSdf = SimpleDateFormat("MMM dd, yyyy", Locale.US)
+                                currentSdf.parse(date)?.let { calendar.time = it }
+                            } catch (e: Exception) {}
+
+                            android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, dayOfMonth ->
+                                    val selectedCalendar = Calendar.getInstance()
+                                    selectedCalendar.set(year, month, dayOfMonth)
+                                    date = SimpleDateFormat("MMM dd, yyyy", Locale.US).format(selectedCalendar.time)
+                                },
+                                calendar.get(Calendar.YEAR),
+                                calendar.get(Calendar.MONTH),
+                                calendar.get(Calendar.DAY_OF_MONTH)
+                            ).show()
+                        }) {
+                            Icon(Icons.Default.CalendarMonth, contentDescription = "Select Date", tint = Color(0xFF00BCD4))
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF00BCD4),
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = Color(0xFF00BCD4),
+                        unfocusedLabelColor = Color.Gray,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    )
+                )
 
                 OutlinedTextField(
                     value = title,
@@ -333,7 +379,7 @@ fun TransactionDialog(
                 onClick = {
                     val amt = amount.toDoubleOrNull() ?: 0.0
                     if (title.isNotEmpty() && amt != 0.0) {
-                        onSaveTransaction(title, category, amt, isIncome)
+                        onSaveTransaction(title, category, amt, isIncome, date)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4))
