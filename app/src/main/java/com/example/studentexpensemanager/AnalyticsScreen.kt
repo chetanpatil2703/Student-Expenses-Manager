@@ -36,7 +36,6 @@ import kotlin.math.sin
 
 enum class TimePeriod(val label: String) {
     MONTHLY("Monthly"),
-    QUARTERLY("Quarterly"),
     ANNUALLY("Annually")
 }
 
@@ -47,10 +46,24 @@ fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
     var selectedPeriod by remember { mutableStateOf(TimePeriod.MONTHLY) }
     var showPeriodMenu by remember { mutableStateOf(false) }
 
-    val filteredTransactions = remember(transactionList, selectedTab, selectedPeriod) {
-        val now = Calendar.getInstance()
+    val currentCalendar = Calendar.getInstance()
+    var selectedMonth by remember { mutableIntStateOf(currentCalendar.get(Calendar.MONTH)) }
+    var selectedYear by remember { mutableIntStateOf(currentCalendar.get(Calendar.YEAR)) }
+    
+    var showMonthMenu by remember { mutableStateOf(false) }
+    var showYearMenu by remember { mutableStateOf(false) }
+
+    val months = listOf(
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    )
+    
+    val availableYears = (2020..currentCalendar.get(Calendar.YEAR) + 1).toList().reversed()
+
+    val filteredTransactions = remember(transactionList, selectedTab, selectedPeriod, selectedMonth, selectedYear) {
         transactionList.filter { transaction ->
-            transaction.isIncome == (selectedTab == 1) && isWithinPeriod(transaction.date, selectedPeriod, now)
+            transaction.isIncome == (selectedTab == 1) && 
+            isWithinSelection(transaction.date, selectedPeriod, selectedMonth, selectedYear)
         }
     }
 
@@ -77,7 +90,7 @@ fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
                 fontWeight = FontWeight.Bold
             )
             
-            // Period Selector
+            // Period Selector (Monthly/Annually)
             Box {
                 Surface(
                     onClick = { showPeriodMenu = true },
@@ -104,6 +117,84 @@ fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
                             onClick = {
                                 selectedPeriod = period
                                 showPeriodMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Month and Year Selectors
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (selectedPeriod == TimePeriod.MONTHLY) {
+                // Month selector
+                Box(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        onClick = { showMonthMenu = true },
+                        color = ItemBackground,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(months[selectedMonth], color = Color.White, fontSize = 14.sp)
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.White)
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = showMonthMenu,
+                        onDismissRequest = { showMonthMenu = false },
+                        modifier = Modifier.background(ItemBackground)
+                    ) {
+                        months.forEachIndexed { index, month ->
+                            DropdownMenuItem(
+                                text = { Text(month, color = Color.White) },
+                                onClick = {
+                                    selectedMonth = index
+                                    showMonthMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Year selector
+            Box(modifier = Modifier.weight(if (selectedPeriod == TimePeriod.MONTHLY) 0.6f else 1f)) {
+                Surface(
+                    onClick = { showYearMenu = true },
+                    color = ItemBackground,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(selectedYear.toString(), color = Color.White, fontSize = 14.sp)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.White)
+                    }
+                }
+                DropdownMenu(
+                    expanded = showYearMenu,
+                    onDismissRequest = { showYearMenu = false },
+                    modifier = Modifier.background(ItemBackground)
+                ) {
+                    availableYears.forEach { year ->
+                        DropdownMenuItem(
+                            text = { Text(year.toString(), color = Color.White) },
+                            onClick = {
+                                selectedYear = year
+                                showYearMenu = false
                             }
                         )
                     }
@@ -141,7 +232,7 @@ fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
 
         if (categoryTotals.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(text = "No data for this period", color = TextSecondary)
+                Text(text = "No data for this selection", color = TextSecondary)
             }
         } else {
             // Pie Chart Section
@@ -186,9 +277,8 @@ fun AnalyticsScreen(viewModel: TransactionViewModel = viewModel()) {
     }
 }
 
-fun isWithinPeriod(dateStr: String, period: TimePeriod, now: Calendar): Boolean {
+fun isWithinSelection(dateStr: String, period: TimePeriod, targetMonth: Int, targetYear: Int): Boolean {
     return try {
-        // Updated to support both "MMM dd" and "MMM dd, yyyy" formats
         val sdf = if (dateStr.contains(",")) {
             SimpleDateFormat("MMM dd, yyyy", Locale.US)
         } else {
@@ -199,23 +289,16 @@ fun isWithinPeriod(dateStr: String, period: TimePeriod, now: Calendar): Boolean 
         val cal = Calendar.getInstance()
         cal.time = date
         
-        // If year is not present in original string, assume current year
         if (!dateStr.contains(",")) {
-            cal.set(Calendar.YEAR, now.get(Calendar.YEAR))
+            cal.set(Calendar.YEAR, Calendar.getInstance().get(Calendar.YEAR))
         }
 
         when (period) {
             TimePeriod.MONTHLY -> {
-                cal.get(Calendar.MONTH) == now.get(Calendar.MONTH) &&
-                cal.get(Calendar.YEAR) == now.get(Calendar.YEAR)
-            }
-            TimePeriod.QUARTERLY -> {
-                val currentQuarter = now.get(Calendar.MONTH) / 3
-                val dateQuarter = cal.get(Calendar.MONTH) / 3
-                currentQuarter == dateQuarter && cal.get(Calendar.YEAR) == now.get(Calendar.YEAR)
+                cal.get(Calendar.MONTH) == targetMonth && cal.get(Calendar.YEAR) == targetYear
             }
             TimePeriod.ANNUALLY -> {
-                cal.get(Calendar.YEAR) == now.get(Calendar.YEAR)
+                cal.get(Calendar.YEAR) == targetYear
             }
         }
     } catch (e: Exception) {
