@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -87,6 +88,7 @@ fun AuthNavHost(onLoginSuccess: () -> Unit) {
 sealed class Screen(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     object Dashboard : Screen("dashboard", "Dashboard", Icons.Default.Dashboard)
     object Analytics : Screen("analytics", "Analytics", Icons.Default.PieChart)
+    object Suggestions : Screen("suggestions", "Insights", Icons.Default.Lightbulb)
 }
 
 @Composable
@@ -94,7 +96,8 @@ fun MainScreen(onLogout: () -> Unit) {
     val navController = rememberNavController()
     val items = listOf(
         Screen.Dashboard,
-        Screen.Analytics
+        Screen.Analytics,
+        Screen.Suggestions
     )
 
     Scaffold(
@@ -138,6 +141,7 @@ fun MainScreen(onLogout: () -> Unit) {
         ) {
             composable(Screen.Dashboard.route) { DashboardScreen(onLogout = onLogout) }
             composable(Screen.Analytics.route) { AnalyticsScreen() }
+            composable(Screen.Suggestions.route) { SuggestionsScreen() }
         }
     }
 }
