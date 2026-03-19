@@ -171,6 +171,7 @@ fun PersonDetailScreen(
     viewModel: DebtViewModel
 ) {
     var showDialog by remember { mutableStateOf(false) }
+    var editingDebt by remember { mutableStateOf<DebtEntity?>(null) }
     var isLentForNewEntry by remember { mutableStateOf(true) }
     
     val currentBalance = debts.sumOf { if (it.isLent) it.amount else -it.amount }
@@ -236,7 +237,7 @@ fun PersonDetailScreen(
 
             LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
                 items(debts.reversed()) { debt ->
-                    TransactionRow(debt)
+                    TransactionRow(debt, onClick = { editingDebt = debt })
                     HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
                 }
             }
@@ -253,13 +254,34 @@ fun PersonDetailScreen(
                 }
             )
         }
+
+        if (editingDebt != null) {
+            QuickAddDialog(
+                isLent = editingDebt!!.isLent,
+                initialAmount = editingDebt!!.amount,
+                initialNote = editingDebt!!.note,
+                isEditing = true,
+                onDismiss = { editingDebt = null },
+                onSave = { amount, note ->
+                    viewModel.update(editingDebt!!.copy(amount = amount, note = note))
+                    editingDebt = null
+                },
+                onDelete = {
+                    viewModel.delete(editingDebt!!)
+                    editingDebt = null
+                }
+            )
+        }
     }
 }
 
 @Composable
-fun TransactionRow(debt: DebtEntity) {
+fun TransactionRow(debt: DebtEntity, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -282,13 +304,21 @@ fun TransactionRow(debt: DebtEntity) {
 }
 
 @Composable
-fun QuickAddDialog(isLent: Boolean, onDismiss: () -> Unit, onSave: (Double, String) -> Unit) {
-    var amount by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
+fun QuickAddDialog(
+    isLent: Boolean,
+    initialAmount: Double = 0.0,
+    initialNote: String = "",
+    isEditing: Boolean = false,
+    onDismiss: () -> Unit,
+    onSave: (Double, String) -> Unit,
+    onDelete: (() -> Unit)? = null
+) {
+    var amount by remember { mutableStateOf(if (initialAmount > 0) initialAmount.toInt().toString() else "") }
+    var note by remember { mutableStateOf(initialNote) }
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isLent) "You Got" else "You Gave", color = Color.White) },
+        title = { Text(if (isEditing) "Edit Transaction" else if (isLent) "You Got" else "You Gave", color = Color.White) },
         containerColor = ItemBackground,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -312,7 +342,15 @@ fun QuickAddDialog(isLent: Boolean, onDismiss: () -> Unit, onSave: (Double, Stri
         confirmButton = {
             Button(onClick = { 
                 amount.toDoubleOrNull()?.let { onSave(it, note) } 
-            }) { Text("Save") }
+            }) { Text(if (isEditing) "Update" else "Save") }
+        },
+        dismissButton = {
+            Row {
+                if (isEditing && onDelete != null) {
+                    TextButton(onClick = onDelete) { Text("Delete", color = Color.Red) }
+                }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
         }
     )
 }
