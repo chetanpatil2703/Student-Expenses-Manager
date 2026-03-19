@@ -14,6 +14,16 @@ data class TransactionEntity(
     val isIncome: Boolean
 )
 
+@Entity(tableName = "debts")
+data class DebtEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val personName: String,
+    val amount: Double,
+    val date: String,
+    val isLent: Boolean, // true if lent (money to receive), false if borrowed (money to pay)
+    val isResolved: Boolean = false
+)
+
 @Dao
 interface TransactionDao {
     @Query("SELECT * FROM transactions ORDER BY id DESC")
@@ -26,9 +36,25 @@ interface TransactionDao {
     suspend fun deleteTransaction(transaction: TransactionEntity)
 }
 
-@Database(entities = [TransactionEntity::class], version = 1)
+@Dao
+interface DebtDao {
+    @Query("SELECT * FROM debts ORDER BY isResolved ASC, id DESC")
+    fun getAllDebts(): Flow<List<DebtEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDebt(debt: DebtEntity)
+
+    @Update
+    suspend fun updateDebt(debt: DebtEntity)
+
+    @Delete
+    suspend fun deleteDebt(debt: DebtEntity)
+}
+
+@Database(entities = [TransactionEntity::class, DebtEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
+    abstract fun debtDao(): DebtDao
 
     companion object {
         @Volatile
@@ -40,7 +66,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "expense_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration() // For simplicity in this dev stage
+                .build()
                 INSTANCE = instance
                 instance
             }
