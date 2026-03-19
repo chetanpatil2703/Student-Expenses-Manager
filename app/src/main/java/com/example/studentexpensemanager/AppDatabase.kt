@@ -21,7 +21,8 @@ data class DebtEntity(
     val amount: Double,
     val date: String,
     val isLent: Boolean, // true if lent (money to receive), false if borrowed (money to pay)
-    val isResolved: Boolean = false
+    val isResolved: Boolean = false,
+    val note: String = ""
 )
 
 @Dao
@@ -51,7 +52,7 @@ interface DebtDao {
     suspend fun deleteDebt(debt: DebtEntity)
 }
 
-@Database(entities = [TransactionEntity::class, DebtEntity::class], version = 2, exportSchema = false)
+@Database(entities = [TransactionEntity::class, DebtEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun debtDao(): DebtDao
